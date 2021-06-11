@@ -1,0 +1,9 @@
+#########################################################################################################################################
+# ### ABMO - Algal Bloom Monthly Occurences
+# ### Script responsible for executing Algal Bloom Monthly Occurences in a region of interest
+# ### Python 3.7 64Bits is required!
+#########################################################################################################################################
+
+### Change History
+Version 1: 
+- Repository creation
