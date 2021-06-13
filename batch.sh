@@ -20,22 +20,11 @@ echo "$PYTHON $BASEDIR/$SCRIPT"
 LAT_LON="-48.84725671390528,-22.04547298853004,-47.71712046185493,-23.21347463046867"
 
 # EXECUTIONS
-for min_occ in "${MIN_OCCS[@]}"
+for year in {1985..2018}
 do
-	eval "$PYTHON $BASEDIR/$SCRIPT --lat_lon=$LAT_LON --date_start=1985-01-01 --date_end=2001-12-31 --min_occurrence=$min_occ"
+	for min_occ in "${MIN_OCCS[@]}"
+	do
+		eval "$PYTHON $BASEDIR/$SCRIPT --lat_lon=$LAT_LON --date_start=$year-01-01 --date_end=$year-12-31 --min_occurrence=$min_occ"
+	done
 done
-
-############################################################################################
-
-
-############################################################################################
-## PERIOD 2
-LAT_LON="-48.84725671390528,-22.04547298853004,-47.71712046185493,-23.21347463046867"
-
-# EXECUTIONS
-for min_occ in "${MIN_OCCS[@]}"
-do
-	eval "$PYTHON $BASEDIR/$SCRIPT --lat_lon=$LAT_LON --date_start=2002-01-01 --date_end=2018-12-31 --min_occurrence=$min_occ"
-done
-
 ############################################################################################
