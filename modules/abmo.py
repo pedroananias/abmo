@@ -486,10 +486,12 @@ class Abmo:
     ### Monthly Occurrences
 
     # go through each year
-    plot_id = 1
-    images = []
     years_list = list(range(int(self.months_list[0].strftime('%Y')),int(self.months_list[-1].strftime('%Y'))+1))
     for i, year in enumerate(years_list):
+
+      # attributes
+      plot_id = 1
+      images = []
 
       # create the plot
       fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
@@ -511,18 +513,19 @@ class Abmo:
           df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
 
           # add plot
-          ax = fig.add_subplot(rows,columns,plot_id)
-          ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-          ax.title.set_text(month.strftime('%B'))
-          s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
-          s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
-          ax.margins(x=0,y=0)
-          ax.set_xticks(xticks)
-          ax.set_yticks(yticks)
-          ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-          ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-          images.append(s)
-          plot_id = plot_id + 1
+          if len(df_year) > 0:
+            ax = fig.add_subplot(rows,columns,plot_id)
+            ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+            ax.title.set_text(month.strftime('%B'))
+            s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
+            s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+            ax.margins(x=0,y=0)
+            ax.set_xticks(xticks)
+            ax.set_yticks(yticks)
+            ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+            images.append(s)
+            plot_id = plot_id + 1
 
       # figure add cmap
       cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
@@ -538,10 +541,12 @@ class Abmo:
     ### Monthly Cloud Occurrences
 
     # go through each year
-    plot_id = 1
-    images = []
     years_list = list(range(int(self.months_list[0].strftime('%Y')),int(self.months_list[-1].strftime('%Y'))+1))
     for i, year in enumerate(years_list):
+
+      # attributes
+      plot_id = 1
+      images = []
 
       # create the plot
       fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
@@ -560,18 +565,19 @@ class Abmo:
           df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
 
           # add plot
-          ax = fig.add_subplot(rows,columns,plot_id)
-          ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-          ax.title.set_text(month.strftime('%B'))
-          s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
-          s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
-          ax.margins(x=0,y=0)
-          ax.set_xticks(xticks)
-          ax.set_yticks(yticks)
-          ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-          ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-          images.append(s)
-          plot_id = plot_id + 1
+          if len(df_year) > 0:
+            ax = fig.add_subplot(rows,columns,plot_id)
+            ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+            ax.title.set_text(month.strftime('%B'))
+            s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
+            s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+            ax.margins(x=0,y=0)
+            ax.set_xticks(xticks)
+            ax.set_yticks(yticks)
+            ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+            ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+            images.append(s)
+            plot_id = plot_id + 1
 
       # figure add cmap
       cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
