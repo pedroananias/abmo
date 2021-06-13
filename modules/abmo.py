@@ -30,6 +30,7 @@ import geojson
 from io import BytesIO
 from datetime import datetime as dt
 from datetime import timedelta as td
+from dateutil.relativedelta import relativedelta as rd
 
 # Matplotlib
 import matplotlib
@@ -66,7 +67,6 @@ class Abmo:
   sample_clip                 = None
   sample_lon_lat              = [[0,0],[0,0]]
   splitted_geometry           = []
-  years_list                  = None
   months_list                 = None
 
   # masks
@@ -138,11 +138,13 @@ class Abmo:
       self.dates_timeseries_interval    = misc.remove_duplicated_dates([dt.fromtimestamp(d/1000.0).replace(hour=00, minute=00, second=00) for d in self.collection.aggregate_array("system:time_start").getInfo()])
 
       # build yearly collection for label band
-      self.years_list                   = ee.List.sequence(ee.Number(int(self.dates_timeseries[0].strftime("%Y"))), ee.Number(int(self.dates_timeseries[1].strftime("%Y"))))
-      self.months_list                  = ee.List.sequence(1, 12)
-      self.collection_yearly            = ee.ImageCollection.fromImages(self.years_list.map(lambda y: self.collection.filter(ee.Filter.calendarRange(y, y, 'year')).sum().set('year', y)))
-      self.years_list                   = self.years_list.getInfo()
-      self.months_list                  = self.months_list.getInfo()
+      self.months_list                  = ee.List.sequence(0,((self.dates_timeseries[1].year - self.dates_timeseries[0].year) * 12 + (self.dates_timeseries[1].month - self.dates_timeseries[0].month)),1)
+      self.months_list                  = self.months_list.map(lambda m: ee.Date(self.dates_timeseries[0].strftime("%Y-%m-%d")).advance(m,'month'))
+      self.collection_yearly            = ee.ImageCollection.fromImages(self.months_list.map(lambda m: self.collection.filter(ee.Filter.calendarRange(ee.Date(m).get('year'), ee.Date(m).get('year'),'year')).filter(ee.Filter.calendarRange(ee.Date(m).get('month'), ee.Date(m).get('month'),'month')).sum().set('year', ee.Date(m).get('year')).set('month', ee.Date(m).get('month'))))
+
+      # get monthly dates range
+      self.months_list                  = [(self.dates_timeseries[1] - rd(months=int(d))) for d in range(0, self.months_list.size().getInfo())]
+      self.months_list.sort()
 
       # preprocessing - water mask extraction
       self.water_mask                   = self.create_water_mask(self.morph_op, self.morph_op_iters)
@@ -158,8 +160,6 @@ class Abmo:
 
       # warning
       print("Statistics: scale="+str(self.sensor_params['scale'])+" meters, pixels="+str(self.sample_total_pixel)+", date_start='"+self.dates_timeseries[0].strftime("%Y-%m-%d")+"', date_end='"+self.dates_timeseries[1].strftime("%Y-%m-%d")+"', tiles='"+str(len(self.splitted_geometry))+"', interval_images='"+str(self.collection.size().getInfo())+"', interval_unique_images='"+str(len(self.dates_timeseries_interval))+"', yearly_images='"+str(self.collection_yearly.size().getInfo())+"', water_mask_images='"+str(self.collection_water.size().getInfo())+"', morph_op='"+str(self.morph_op)+"', morph_op_iters='"+str(self.morph_op_iters)+"'")
-
-      sys.exit()
 
     # error, no images found
     else:
@@ -222,9 +222,9 @@ class Abmo:
     return self.apply_water_mask(ee.Image(collection.max()).set('system:id', collection.first().get('system:id').getInfo()), False)
     
 
-  # extract image from yearly collection
-  def extract_image_from_collection_yearly(self, year):
-    collection = self.collection_yearly.filter(ee.Filter.eq('year', int(year)))
+  # extract image from monthly collection
+  def extract_image_from_collection_monthly(self, month):
+    collection = self.collection_yearly.filter(ee.Filter.eq('year', month.year)).filter(ee.Filter.eq('month', month.month))
     if int(collection.size().getInfo()) == 0:
       return None
     return self.apply_water_mask(ee.Image(collection.first()), False)
@@ -263,10 +263,10 @@ class Abmo:
 
 
   # get cache files for datte
-  def get_cache_files(self, year: int):
+  def get_cache_files(self, month):
     prefix            = self.hash_string.encode()+self.lat_lon.encode()+self.sensor.encode()+str(self.morph_op).encode()+str(self.morph_op_iters).encode()+str(gee.indice_selected).encode()+str(gee.min_occurrence).encode()
-    hash_image        = hashlib.md5(prefix+(str(year)+'original').encode())
-    hash_timeseries   = hashlib.md5(prefix+(str(self.years_list[0])+str(self.years_list[-1])).encode())
+    hash_image        = hashlib.md5(prefix+(str(month.strftime("%Y-%m"))+'original').encode())
+    hash_timeseries   = hashlib.md5(prefix+(str(self.months_list[0].strftime("%Y-%m"))+str(self.months_list[-1].strftime("%Y-%m"))).encode())
     return [self.cache_path+'/'+hash_image.hexdigest(), self.cache_path+'/'+hash_timeseries.hexdigest()]
 
 
@@ -282,7 +282,7 @@ class Abmo:
     df_timeseries  = pd.DataFrame(columns=df_columns)
 
     # check timeseries is already on cache
-    cache_files    = self.get_cache_files(year=dt.now().strftime("%Y"))
+    cache_files    = self.get_cache_files(month=dt.now())
     try:
 
       # warning
@@ -303,15 +303,15 @@ class Abmo:
       print("Error trying to get it from cache: either doesn't exist or is corrupted! Creating it again...")
 
       # process all years in time series
-      for year in self.years_list:
+      for month in self.months_list:
 
         # extract pixels from image
         # check if is good image (with pixels)
-        df_timeseries_ = self.extract_image_pixels(image=self.extract_image_from_collection_yearly(year=year), year=year)
+        df_timeseries_ = self.extract_image_pixels(image=self.extract_image_from_collection_monthly(month=month), month=month)
         if df_timeseries_.size > 0:
           df_timeseries = self.merge_timeseries(df_list=[df_timeseries, df_timeseries_])
 
-      # get only good years
+      # get only good months
       # fix dataframe index
       if not df_timeseries is None:
         df_timeseries['index'] = range(0,len(df_timeseries))
@@ -321,7 +321,7 @@ class Abmo:
           joblib.dump(df_timeseries, cache_files[1])
 
     # correct columns types
-    df_timeseries[['pixel','year']] = df_timeseries[['pixel','year']].astype('int64')
+    df_timeseries[['pixel','year','month']] = df_timeseries[['pixel','year','month']].astype('int64')
     df_timeseries[self.attributes+['lat','lon']] = df_timeseries[self.attributes+['lat','lon']].astype('float64')
 
     # remove dummies
@@ -332,7 +332,7 @@ class Abmo:
     df_timeseries.loc[df_timeseries['cloud'] == abs(self.dummy), 'cloud'] = 0.0
 
     # remove duplicated values
-    df_timeseries.drop_duplicates(subset=['pixel','year','lat','lon']+self.attributes, keep='last', inplace=True)
+    df_timeseries.drop_duplicates(subset=['pixel','year','month','lat','lon']+self.attributes, keep='last', inplace=True)
 
     # add porcentage of occurrence and cloud
     df_timeseries['pct_occurrence']   = (df_timeseries['occurrence']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']))*100
@@ -355,18 +355,18 @@ class Abmo:
     df            = pd.concat(df_list, ignore_index=True, sort=False)
     df['index']   = np.arange(start=0, stop=len(df), step=1, dtype=np.int64)
     gc.collect()
-    return df.sort_values(by=['year', 'pixel'])
+    return df.sort_values(by=['year', 'month', 'pixel'])
 
 
   # extract image's coordinates and pixels values
-  def extract_image_pixels(self, image: ee.Image, year: int):
+  def extract_image_pixels(self, image: ee.Image, month):
 
     # warning
-    print("Processing year ["+str(year)+"]...")
+    print("Processing month ["+str(month.strftime('%Y-%m'))+"]...")
 
     # attributes
     lons_lats_attributes     = None
-    cache_files              = self.get_cache_files(year)
+    cache_files              = self.get_cache_files(month)
     df_timeseries            = pd.DataFrame(columns=self.df_columns)
 
     # trying to find image in cache
@@ -392,7 +392,7 @@ class Abmo:
       try:
 
         # check if image has less cloud than the cloud threshold
-        clip = self.clip_image(self.extract_image_from_collection_yearly(year=year))
+        clip = self.clip_image(self.extract_image_from_collection_monthly(month=month))
         
         # go through each tile
         lons_lats_attributes = np.array([], dtype=np.float64).reshape(0, len(self.attributes)+2)
@@ -408,7 +408,7 @@ class Abmo:
       except:
         
         # warning
-        print("Error while extracting pixels from year "+str(year)+": "+str(traceback.format_exc()))
+        print("Error while extracting pixels from month "+str(month.strftime('%Y-%m'))+": "+str(traceback.format_exc()))
 
         # reset attributes
         lons_lats_attributes = None
@@ -421,7 +421,7 @@ class Abmo:
         raise Exception()
 
       # build dataframe
-      extra_attributes        = np.array(list(zip([0]*len(lons_lats_attributes),[0]*len(lons_lats_attributes),[year]*len(lons_lats_attributes))))
+      extra_attributes        = np.array(list(zip([0]*len(lons_lats_attributes),[0]*len(lons_lats_attributes),[month.year]*len(lons_lats_attributes),[month.month]*len(lons_lats_attributes))))
       df_timeseries           = pd.DataFrame(data=np.concatenate((extra_attributes, lons_lats_attributes), axis=1), columns=self.df_columns).sort_values(['lat','lon'])
       df_timeseries['pixel']  = range(0,len(df_timeseries))
 
@@ -436,7 +436,7 @@ class Abmo:
     except:
 
       # show error
-      print("Error while extracting pixels from year "+str(year)+":")
+      print("Error while extracting pixels month "+str(month.strftime('%Y-%m'))+":")
       print(traceback.format_exc())
 
       # remove cache file
@@ -461,16 +461,10 @@ class Abmo:
     # check if folder exists
     if not os.path.exists(folder):
       os.mkdir(folder)
-    
-    # years list
-    years_list  = df.groupby('year')['year'].agg('mean').values
-
-    # build date string
-    str_date    = str(int(min(years_list))) + ' to ' + str(int(max(years_list)))
 
     # number of columns
-    columns     = 6 if len(years_list)>=6 else len(years_list)
-    rows        = math.ceil(len(years_list)/columns)
+    columns     = 4
+    rows        = 3
     fig_height  = 16/columns
   
     # axis ticks
@@ -483,89 +477,110 @@ class Abmo:
     colorbar_ticks_labels       = [str(l) for l in colorbar_ticks]
     colorbar_ticks_labels[-1]   = str(colorbar_ticks_labels[-1])
 
-    ###############
-    ### Yearly Occurrences
-
-    # create the plot
-    fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
-    fig.suptitle('% Algal Bloom Yearly Occurrences  ('+str_date+', '+str(gee.indice_selected).upper()+')', fontsize=14, y=1.04)
-    fig.autofmt_xdate()
-    plt.rc('xtick',labelsize=6)
-    plt.rc('ytick',labelsize=6)
-
     # marker size
     multiplier  = math.ceil(self.sensor_params['scale']/100)
     multiplier  = multiplier if multiplier >= 1 else 1
-    markersize  = (72./fig.dpi)*multiplier
+    markersize  = (72./300)*multiplier
+
+    ###############
+    ### Monthly Occurrences
 
     # go through each year
+    plot_id = 1
     images = []
+    years_list = list(range(int(self.months_list[0].strftime('%Y')),int(self.months_list[-1].strftime('%Y'))+1))
     for i, year in enumerate(years_list):
 
-      # filter year data
-      df_year = df[(df['year'] == year)]
+      # create the plot
+      fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
+      fig.suptitle('% Algal Bloom Monthly Occurrences  ('+str(year)+', '+str(gee.indice_selected).upper()+')', fontsize=14, y=1.04)
+      fig.autofmt_xdate()
+      plt.rc('xtick',labelsize=6)
+      plt.rc('ytick',labelsize=6)
 
-      # add plot
-      ax = fig.add_subplot(rows,columns,i+1)
-      ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-      ax.title.set_text(str(int(year)))
-      s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
-      s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
-      ax.margins(x=0,y=0)
-      ax.set_xticks(xticks)
-      ax.set_yticks(yticks)
-      ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-      ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-      images.append(s)
+      # go through each month
+      for j, month in enumerate(self.months_list):
 
-    # figure add cmap
-    cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
-    cbar.set_label("% of occurrence")
+        # warning
+        print("Building occurrences for month '"+str(month.strftime('%Y-%m'))+"'...")
 
-    # save it to file
-    plt.subplots_adjust(wspace=0.4, hspace=0.4)
-    plt.tight_layout()
-    fig.savefig(folder+'/occurrences.png', bbox_inches='tight')
+        # check if month is in the year
+        if year == month.year:
+
+          # filter year data
+          df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+
+          # add plot
+          ax = fig.add_subplot(rows,columns,plot_id)
+          ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+          ax.title.set_text(month.strftime('%B'))
+          s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
+          s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+          ax.margins(x=0,y=0)
+          ax.set_xticks(xticks)
+          ax.set_yticks(yticks)
+          ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+          ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+          images.append(s)
+          plot_id = plot_id + 1
+
+      # figure add cmap
+      cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
+      cbar.set_label("% of occurrence")
+
+      # save it to file
+      plt.subplots_adjust(wspace=0.4, hspace=0.4)
+      plt.tight_layout()
+      fig.savefig(folder+'/occurrences_'+str(year)+'.png', bbox_inches='tight')
 
 
     ###############
-    ### Yearly Cloud Occurrences
-
-    # create the plot
-    fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
-    fig.suptitle('% Algal Bloom Yearly Cloud Occurrences  ('+str_date+')', fontsize=14, y=1.04)
-    fig.autofmt_xdate()
-    plt.rc('xtick',labelsize=6)
-    plt.rc('ytick',labelsize=6)
+    ### Monthly Cloud Occurrences
 
     # go through each year
+    plot_id = 1
     images = []
+    years_list = list(range(int(self.months_list[0].strftime('%Y')),int(self.months_list[-1].strftime('%Y'))+1))
     for i, year in enumerate(years_list):
 
-      # filter year data
-      df_year = df[(df['year'] == year)]
+      # create the plot
+      fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
+      fig.suptitle('% Algal Bloom Monthly Cloud Occurrences  ('+str(year)+')', fontsize=14, y=1.04)
+      fig.autofmt_xdate()
+      plt.rc('xtick',labelsize=6)
+      plt.rc('ytick',labelsize=6)
 
-      # add plot
-      ax = fig.add_subplot(rows,columns,i+1)
-      ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-      ax.title.set_text(str(int(year)))
-      s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
-      s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
-      ax.margins(x=0,y=0)
-      ax.set_xticks(xticks)
-      ax.set_yticks(yticks)
-      ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-      ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-      images.append(s)
+      # go through each month
+      for j, month in enumerate(self.months_list):
 
-    # figure add cmap
-    cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
-    cbar.set_label("% of occurrence")
+        # check if month is in the year
+        if year == month.year:
 
-    # save it to file
-    plt.subplots_adjust(wspace=0.4, hspace=0.4)
-    plt.tight_layout()
-    fig.savefig(folder+'/occurrences_clouds.png', bbox_inches='tight')
+          # filter year data
+          df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+
+          # add plot
+          ax = fig.add_subplot(rows,columns,plot_id)
+          ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+          ax.title.set_text(month.strftime('%B'))
+          s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
+          s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+          ax.margins(x=0,y=0)
+          ax.set_xticks(xticks)
+          ax.set_yticks(yticks)
+          ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+          ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+          images.append(s)
+          plot_id = plot_id + 1
+
+      # figure add cmap
+      cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
+      cbar.set_label("% of occurrence")
+
+      # save it to file
+      plt.subplots_adjust(wspace=0.4, hspace=0.4)
+      plt.tight_layout()
+      fig.savefig(folder+'/occurrences_clouds_'+str(year)+'.png', bbox_inches='tight')
 
     # warning
     print("finished!")
@@ -582,13 +597,10 @@ class Abmo:
     if not os.path.exists(folder):
       os.mkdir(folder)
 
-    # years list
-    years_list = df.groupby('year')['year'].agg('mean').values
-
     # # save occurrences data
     features = []
     for index, row in df.iterrows():
-      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "instants": int(row['instants'])}))
+      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "month": int(row['month']), "instants": int(row['instants'])}))
     fc = geojson.FeatureCollection(features)
     f = open(folder+"/occurrences.json","w")
     geojson.dump(fc, f)
@@ -599,7 +611,7 @@ class Abmo:
   def save_collection_tiff(self, folder: str, folderName: str, rgb: bool = False):
 
     # build Google Drive folder name where tiffs will be saved in
-    folderName = "abyo_"+str(folderName)+".tiff"
+    folderName = "abmo_"+str(folderName)+".tiff"
     
     # warning
     print()
