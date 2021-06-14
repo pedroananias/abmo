@@ -39,7 +39,7 @@ The following results are generated:
 - timeseries.csv (Monthly time series of pixels, year, latitude, longitude and occurrences of algae bloom (based on the threshold of the Slope index) and clouds)
 - occurrences.png (Graphs of occurrences separated annually from algal blooms)
 - occurrences_clouds.png (Graphs of occurrences separated annually from clouds)
-- geojson/occurrences_{year}_{month}.json (GeoJSON of occurrences by year and month with parameters (occurrence, not_occurrence, pct_occurrence, cloud, pct_cloud, year and instants) that can be imported into QGIS and filtered)
+- occurrences.json (GeoJSON of occurrences by year and month with parameters (occurrence, not_occurrence, pct_occurrence, cloud, pct_cloud, year, month and instants) that can be imported into QGIS and filtered)
 - tiff/{date}.zip (ZIP of GeoTIFFs comprehending bands Cloud/Only Water Body, Occurrence/Only Water Body and Not Occurrence/Only Water Body of the study area. If the script can not save those images in locally, will send them to Google Drive)
 
 
@@ -68,7 +68,9 @@ abmo = abmo.Abmo(lat_lon="-48.84725671390528,-22.04547298853004,-47.717120461854
                 date_end=dt.strptime("2018-12-31", "%Y-%m-%d"),
                 sensor="landsat578",
                 cache_path=folder, 
-                force_cache=False)
+                force_cache=False,
+                indice="mndwi,ndvi,fai,sabi,slope",
+                min_occurrence=4)
 
 # creating yearly timeseries
 abmo.process_timeseries_data()
