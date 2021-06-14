@@ -41,6 +41,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.ticker import FormatStrFormatter
 from matplotlib import cm
 from matplotlib.patches import Rectangle
+from six import string_types
 
 # Local
 from modules import misc, gee
@@ -68,6 +69,7 @@ class Abmo:
   sample_lon_lat              = [[0,0],[0,0]]
   splitted_geometry           = []
   months_list                 = None
+  seasons_list                = dict({1: "summer", 2: "summer", 3: "summer", 4: "autumn", 5: "autumn", 6: "autumn", 7: "winter", 8: "winter", 9: "winter", 10: "spring", 11: "spring", 12: "spring"})
 
   # masks
   water_mask                  = None
@@ -81,7 +83,7 @@ class Abmo:
   attributes                  = ['cloud', 'label', 'occurrence', 'not_occurrence']
 
   # dataframes
-  df_columns                  = ['pixel', 'index', 'year', 'month', 'lat', 'lon']+attributes
+  df_columns                  = ['pixel', 'index', 'year', 'month', 'season', 'lat', 'lon']+attributes
   df_timeseries               = None
 
   # hash
@@ -98,7 +100,8 @@ class Abmo:
                morph_op:          str           = None,
                morph_op_iters:    int           = 1,
                indice:            str           = "mndwi,ndvi,fai,sabi,slope",
-               min_occurrence:    int           = 4):
+               min_occurrence:    int           = 4,
+               seasonal:          bool          = False):
     
     # get sensor parameters
     self.sensor_params  = gee.get_sensor_params(sensor)
@@ -334,6 +337,8 @@ class Abmo:
     # remove duplicated values
     df_timeseries.drop_duplicates(subset=['pixel','year','month','lat','lon']+self.attributes, keep='last', inplace=True)
 
+    sys.exit()
+
     # add porcentage of occurrence and cloud
     df_timeseries['pct_occurrence']   = (df_timeseries['occurrence']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']))*100
     df_timeseries['pct_cloud']        = (df_timeseries['cloud']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']+df_timeseries['cloud']))*100
@@ -421,7 +426,7 @@ class Abmo:
         raise Exception()
 
       # build dataframe
-      extra_attributes        = np.array(list(zip([0]*len(lons_lats_attributes),[0]*len(lons_lats_attributes),[month.year]*len(lons_lats_attributes),[month.month]*len(lons_lats_attributes))))
+      extra_attributes        = np.array(list(zip([0]*len(lons_lats_attributes),[0]*len(lons_lats_attributes),[month.year]*len(lons_lats_attributes),[month.month]*len(lons_lats_attributes),[self.seasons_list[int(month.month)]]*len(lons_lats_attributes))))
       df_timeseries           = pd.DataFrame(data=np.concatenate((extra_attributes, lons_lats_attributes), axis=1), columns=self.df_columns).sort_values(['lat','lon'])
       df_timeseries['pixel']  = range(0,len(df_timeseries))
 
@@ -504,7 +509,7 @@ class Abmo:
       for j, month in enumerate(self.months_list):
 
         # warning
-        print("Building occurrences for month '"+str(month.strftime('%Y-%m'))+"'...")
+        print("Building occurrences for month '"+str(month.strftime('%Y-%m'))+"/"+str(self.seasons_list[month])+"'...")
 
         # check if month is in the year
         if year == month.year:
@@ -516,7 +521,7 @@ class Abmo:
           if len(df_year) > 0:
             ax = fig.add_subplot(rows,columns,plot_id)
             ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-            ax.title.set_text(month.strftime('%B'))
+            ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month])
             s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
             s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
             ax.margins(x=0,y=0)
@@ -568,7 +573,7 @@ class Abmo:
           if len(df_year) > 0:
             ax = fig.add_subplot(rows,columns,plot_id)
             ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-            ax.title.set_text(month.strftime('%B'))
+            ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month])
             s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
             s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
             ax.margins(x=0,y=0)
@@ -609,7 +614,7 @@ class Abmo:
     # # save occurrences data
     features = []
     for index, row in df.iterrows():
-      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "month": int(row['month']), "instants": int(row['instants'])}))
+      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "month": int(row['month']), "season": str(row['season']), "instants": int(row['instants'])}))
     fc = geojson.FeatureCollection(features)
     f = open(folder+"/occurrences.json","w")
     geojson.dump(fc, f)

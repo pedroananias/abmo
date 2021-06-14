@@ -54,6 +54,8 @@ parser.add_argument('--indice', dest='indice', action='store', default="mndwi,nd
                    help="Define which indice will be used to determine algal blooms (mndwi, ndvi, fai, sabi e/ou slope)")
 parser.add_argument('--min_occurrence', dest='min_occurrence', type=int, action='store', default=4,
                    help="Define how many indices will have to match in order to determine pixel as algal bloom occurrence")
+parser.add_argument('--seasonal', dest='seasonal', type=bool, action='store', default=False,
+                   help="Define if pixels will be reduced by using seasons instead of months")
 parser.add_argument('--force_cache', dest='force_cache', action='store_true',
                    help="Force cache reseting to prevent image errors")
 
@@ -92,7 +94,7 @@ try:
   # ### ABMO execution
 
   # folder to save results from algorithm at
-  folder = folderRoot+'/'+dt.now().strftime("%Y%m%d_%H%M%S")+'[v='+str(version)+'-'+str(args.name)+',dstart='+str(args.date_start)+',dend='+str(args.date_end)+',i='+str(args.indice)+',moc='+str(args.min_occurrence)+']'
+  folder = folderRoot+'/'+dt.now().strftime("%Y%m%d_%H%M%S")+'[v='+str(version)+'-'+str(args.name)+',dstart='+str(args.date_start)+',dend='+str(args.date_end)+',i='+str(args.indice)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+']'
   if not os.path.exists(folder):
     os.mkdir(folder)
 
@@ -104,7 +106,8 @@ try:
                    cache_path=folderCache, 
                    force_cache=args.force_cache,
                    indice=args.indice,
-                   min_occurrence=args.min_occurrence)
+                   min_occurrence=args.min_occurrence,
+                   seasonal=args.seasonal)
 
   # preprocessing
   abmo.process_timeseries_data()
