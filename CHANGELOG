@@ -7,3 +7,6 @@
 ### Change History
 Version 1: 
 - Repository creation
+
+Version 2: 
+- Fix nan values when generating geojson files

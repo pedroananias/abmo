@@ -603,6 +603,9 @@ class Abmo:
     if not os.path.exists(folder):
       os.mkdir(folder)
 
+    # fix nan values
+    df = df.fillna(0)
+
     # # save occurrences data
     features = []
     for index, row in df.iterrows():
