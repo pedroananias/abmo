@@ -70,6 +70,7 @@ class Abmo:
   splitted_geometry           = []
   months_list                 = None
   seasons_list                = dict({1: "summer", 2: "summer", 3: "summer", 4: "autumn", 5: "autumn", 6: "autumn", 7: "winter", 8: "winter", 9: "winter", 10: "spring", 11: "spring", 12: "spring"})
+  seasons_list_               = ['summer', 'autumn', 'winter', 'spring']
 
   # masks
   water_mask                  = None
@@ -120,6 +121,7 @@ class Abmo:
     self.force_cache                  = force_cache
     self.morph_op                     = morph_op
     self.morph_op_iters               = morph_op_iters
+    self.seasonal                     = seasonal
 
     # change GEE indice selected
     gee.indice_selected               = indice
@@ -143,7 +145,12 @@ class Abmo:
       # build yearly collection for label band
       self.months_list                  = ee.List.sequence(0,((self.dates_timeseries[1].year - self.dates_timeseries[0].year) * 12 + (self.dates_timeseries[1].month - self.dates_timeseries[0].month)),1)
       self.months_list                  = self.months_list.map(lambda m: ee.Date(self.dates_timeseries[0].strftime("%Y-%m-%d")).advance(m,'month'))
-      self.collection_yearly            = ee.ImageCollection.fromImages(self.months_list.map(lambda m: self.collection.filter(ee.Filter.calendarRange(ee.Date(m).get('year'), ee.Date(m).get('year'),'year')).filter(ee.Filter.calendarRange(ee.Date(m).get('month'), ee.Date(m).get('month'),'month')).sum().set('year', ee.Date(m).get('year')).set('month', ee.Date(m).get('month'))))
+      seasons_list_ee                   = ee.List(list(self.seasons_list.values()))
+      self.collection                   = self.collection.map(lambda i: i.set('season', ee.String(ee.Date(i.get('system:time_start')).get('year').format()).cat("-").cat(seasons_list_ee.get(ee.Date(i.get('system:time_start')).get('month').subtract(1)))))
+      if self.seasonal:
+        self.collection_yearly = ee.ImageCollection.fromImages(self.collection.aggregate_array('season').distinct().map(lambda s: self.collection.filterMetadata('season', 'equals', ee.String(s)).sum().set('year', ee.Number.parse(ee.String(s).split("-").get(0))).set('month', seasons_list_ee.indexOf(ee.String(s).split("-").get(1)).add(1)).set('season', ee.String(s).split("-").get(1))))
+      else:
+        self.collection_yearly = ee.ImageCollection.fromImages(self.months_list.map(lambda m: self.collection.filter(ee.Filter.calendarRange(ee.Date(m).get('year'), ee.Date(m).get('year'),'year')).filter(ee.Filter.calendarRange(ee.Date(m).get('month'), ee.Date(m).get('month'),'month')).sum().set('year', ee.Date(m).get('year')).set('month', ee.Date(m).get('month')).set('season', seasons_list_ee.get(ee.Date(m).get('month').subtract(1)))))
 
       # get monthly dates range
       self.months_list                  = [(self.dates_timeseries[1] - rd(months=int(d))) for d in range(0, self.months_list.size().getInfo())]
@@ -227,7 +234,10 @@ class Abmo:
 
   # extract image from monthly collection
   def extract_image_from_collection_monthly(self, month):
-    collection = self.collection_yearly.filter(ee.Filter.eq('year', month.year)).filter(ee.Filter.eq('month', month.month))
+    if self.seasonal:
+      collection = self.collection_yearly.filter(ee.Filter.eq('year', month.year)).filter(ee.Filter.eq('season', self.seasons_list[month.month]))
+    else:
+      collection = self.collection_yearly.filter(ee.Filter.eq('year', month.year)).filter(ee.Filter.eq('month', month.month))
     if int(collection.size().getInfo()) == 0:
       return None
     return self.apply_water_mask(ee.Image(collection.first()), False)
@@ -267,7 +277,7 @@ class Abmo:
 
   # get cache files for datte
   def get_cache_files(self, month):
-    prefix            = self.hash_string.encode()+self.lat_lon.encode()+self.sensor.encode()+str(self.morph_op).encode()+str(self.morph_op_iters).encode()+str(gee.indice_selected).encode()+str(gee.min_occurrence).encode()
+    prefix            = self.hash_string.encode()+self.lat_lon.encode()+self.sensor.encode()+str(self.morph_op).encode()+str(self.morph_op_iters).encode()+str(gee.indice_selected).encode()+str(gee.min_occurrence).encode()+str(self.seasonal).encode()
     hash_image        = hashlib.md5(prefix+(str(month.strftime("%Y-%m"))+'original').encode())
     hash_timeseries   = hashlib.md5(prefix+(str(self.months_list[0].strftime("%Y-%m"))+str(self.months_list[-1].strftime("%Y-%m"))).encode())
     return [self.cache_path+'/'+hash_image.hexdigest(), self.cache_path+'/'+hash_timeseries.hexdigest()]
@@ -306,13 +316,24 @@ class Abmo:
       print("Error trying to get it from cache: either doesn't exist or is corrupted! Creating it again...")
 
       # process all years in time series
-      for month in self.months_list:
+      if self.seasonal:
+        for year in self.collection_yearly.aggregate_array('year').distinct().getInfo():
+          for season in self.collection_yearly.aggregate_array('season').distinct().getInfo():
+            month = dt.strptime(str(year)+"-"+str(list(self.seasons_list.values()).index(season)+1)+"-"+str(1), '%Y-%m-%d')
 
-        # extract pixels from image
-        # check if is good image (with pixels)
-        df_timeseries_ = self.extract_image_pixels(image=self.extract_image_from_collection_monthly(month=month), month=month)
-        if df_timeseries_.size > 0:
-          df_timeseries = self.merge_timeseries(df_list=[df_timeseries, df_timeseries_])
+            # extract pixels from image
+            # check if is good image (with pixels)
+            df_timeseries_ = self.extract_image_pixels(image=self.extract_image_from_collection_monthly(month=month), month=month)
+            if df_timeseries_.size > 0:
+              df_timeseries = self.merge_timeseries(df_list=[df_timeseries, df_timeseries_])
+      else:
+        for month in self.months_list:
+
+          # extract pixels from image
+          # check if is good image (with pixels)
+          df_timeseries_ = self.extract_image_pixels(image=self.extract_image_from_collection_monthly(month=month), month=month)
+          if df_timeseries_.size > 0:
+            df_timeseries = self.merge_timeseries(df_list=[df_timeseries, df_timeseries_])
 
       # get only good months
       # fix dataframe index
@@ -337,7 +358,9 @@ class Abmo:
     # remove duplicated values
     df_timeseries.drop_duplicates(subset=['pixel','year','month','lat','lon']+self.attributes, keep='last', inplace=True)
 
-    sys.exit()
+    # # check if it is seasonal reduction
+    # if self.seasonal == True:
+    #   df_timeseries = df_timeseries.groupby(['year','season','lat','lon']).sum().reset_index()
 
     # add porcentage of occurrence and cloud
     df_timeseries['pct_occurrence']   = (df_timeseries['occurrence']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']))*100
@@ -367,7 +390,10 @@ class Abmo:
   def extract_image_pixels(self, image: ee.Image, month):
 
     # warning
-    print("Processing month ["+str(month.strftime('%Y-%m'))+"]...")
+    if self.seasonal:
+      print("Processing season ["+str(month.strftime('%Y'))+"-"+str(self.seasons_list[month.month])+"]...")
+    else:
+      print("Processing month ["+str(month.strftime('%Y-%m'))+"]...")
 
     # attributes
     lons_lats_attributes     = None
@@ -469,7 +495,7 @@ class Abmo:
 
     # number of columns
     columns     = 4
-    rows        = 3
+    rows        = 1 if self.seasonal else 3
     fig_height  = 16/columns
   
     # axis ticks
@@ -500,28 +526,28 @@ class Abmo:
 
       # create the plot
       fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
-      fig.suptitle('% Algal Bloom Monthly Occurrences  ('+str(year)+', '+str(gee.indice_selected).upper()+')', fontsize=14, y=1.04)
+      fig.suptitle('% Algal Bloom Monthly/Seasonally Occurrences  ('+str(year)+', '+str(gee.indice_selected).upper()+')', fontsize=14, y=1.04)
       fig.autofmt_xdate()
       plt.rc('xtick',labelsize=6)
       plt.rc('ytick',labelsize=6)
 
-      # go through each month
-      for j, month in enumerate(self.months_list):
+      # check seasonal reduction is enabled
+      if self.seasonal:
 
-        # warning
-        print("Building occurrences for month '"+str(month.strftime('%Y-%m'))+"/"+str(self.seasons_list[month])+"'...")
+        # go through each season
+        for j, season in enumerate(self.seasons_list_):
 
-        # check if month is in the year
-        if year == month.year:
+          # warning
+          print("Building occurrences for season '"+str(year)+"/"+str(season)+"'...")
 
           # filter year data
-          df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+          df_year = df[(df['year'] == year) & (df['season'] == season)]
 
           # add plot
           if len(df_year) > 0:
             ax = fig.add_subplot(rows,columns,plot_id)
             ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-            ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month])
+            ax.title.set_text(season.capitalize())
             s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
             s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
             ax.margins(x=0,y=0)
@@ -531,6 +557,35 @@ class Abmo:
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
             images.append(s)
             plot_id = plot_id + 1
+
+      else:
+
+        # go through each month
+        for j, month in enumerate(self.months_list):
+
+          # warning
+          print("Building occurrences for month '"+str(month.strftime('%Y-%m'))+"'...")
+
+          # check if month is in the year
+          if year == month.year:
+
+            # filter year data
+            df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+
+            # add plot
+            if len(df_year) > 0:
+              ax = fig.add_subplot(rows,columns,plot_id)
+              ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+              ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month.month].capitalize())
+              s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_occurrence'], cmap=plt.get_cmap('jet'))
+              s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+              ax.margins(x=0,y=0)
+              ax.set_xticks(xticks)
+              ax.set_yticks(yticks)
+              ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+              ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+              images.append(s)
+              plot_id = plot_id + 1
 
       # figure add cmap
       cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
@@ -555,25 +610,28 @@ class Abmo:
 
       # create the plot
       fig = plt.figure(figsize=(20,rows*fig_height), dpi=300)
-      fig.suptitle('% Algal Bloom Monthly Cloud Occurrences  ('+str(year)+')', fontsize=14, y=1.04)
+      fig.suptitle('% Algal Bloom Monthly/Seasonally Cloud Occurrences  ('+str(year)+')', fontsize=14, y=1.04)
       fig.autofmt_xdate()
       plt.rc('xtick',labelsize=6)
       plt.rc('ytick',labelsize=6)
 
-      # go through each month
-      for j, month in enumerate(self.months_list):
+      # check seasonal reduction is enabled
+      if self.seasonal:
 
-        # check if month is in the year
-        if year == month.year:
+        # go through each season
+        for j, season in enumerate(['winter','spring','summer','autumn']):
+
+          # warning
+          print("Building clouds for season '"+str(year)+"/"+str(season)+"'...")
 
           # filter year data
-          df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+          df_year = df[(df['year'] == year) & (df['season'] == season)]
 
           # add plot
           if len(df_year) > 0:
             ax = fig.add_subplot(rows,columns,plot_id)
             ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
-            ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month])
+            ax.title.set_text(season.capitalize())
             s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
             s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
             ax.margins(x=0,y=0)
@@ -583,6 +641,35 @@ class Abmo:
             ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
             images.append(s)
             plot_id = plot_id + 1
+
+      else:
+
+        # go through each month
+        for j, month in enumerate(self.months_list):
+
+          # warning
+          print("Building clouds for month '"+str(month.strftime('%Y-%m'))+"'...")
+
+          # check if month is in the year
+          if year == month.year:
+
+            # filter year data
+            df_year = df[(df['year'] == month.year) & (df['month'] == month.month)]
+
+            # add plot
+            if len(df_year) > 0:
+              ax = fig.add_subplot(rows,columns,plot_id)
+              ax.grid(True, linestyle='dashed', color='#909090', linewidth=0.1)
+              ax.title.set_text(month.strftime('%B')+"/"+self.seasons_list[month.month].capitalize())
+              s = ax.scatter(df_year['lat'], df_year['lon'], s=markersize, c=df_year['pct_cloud'], cmap=plt.get_cmap('Greys'))
+              s.set_clim(colorbar_ticks[0], colorbar_ticks[-1])
+              ax.margins(x=0,y=0)
+              ax.set_xticks(xticks)
+              ax.set_yticks(yticks)
+              ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+              ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+              images.append(s)
+              plot_id = plot_id + 1
 
       # figure add cmap
       cbar = fig.colorbar(images[-1], cax=fig.add_axes([0.6, -0.05, 0.39, 0.05]), ticks=colorbar_ticks, orientation='horizontal')
@@ -612,13 +699,23 @@ class Abmo:
     df = df.fillna(0)
 
     # # save occurrences data
-    features = []
-    for index, row in df.iterrows():
-      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "month": int(row['month']), "season": str(row['season']), "instants": int(row['instants'])}))
-    fc = geojson.FeatureCollection(features)
-    f = open(folder+"/occurrences.json","w")
-    geojson.dump(fc, f)
-    f.close()
+    # check seasonal reduction is enabled
+    if self.seasonal:
+      features = []
+      for index, row in df.iterrows():
+        features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "season": str(row['season']), "instants": int(row['instants'])}))
+      fc = geojson.FeatureCollection(features)
+      f = open(folder+"/occurrences.json","w")
+      geojson.dump(fc, f)
+      f.close()
+    else:
+      features = []
+      for index, row in df.iterrows():
+        features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"occurrence": int(row['occurrence']), "not_occurrence": int(row['not_occurrence']), "pct_occurrence": int(row['pct_occurrence']), "cloud": int(row['cloud']), "pct_cloud": int(row['pct_cloud']), "year": int(row['year']), "month": int(row['month']), "season": str(row['season']), "instants": int(row['instants'])}))
+      fc = geojson.FeatureCollection(features)
+      f = open(folder+"/occurrences.json","w")
+      geojson.dump(fc, f)
+      f.close()
 
 
   # save a collection in tiff (zip) to folder (time series)

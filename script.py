@@ -15,20 +15,15 @@ version = "V2"
 
 # Main
 import ee
-import pandas as pd
-import math
-import requests
 import time
-import warnings
 import os
 import sys
 import argparse
-import logging
 import traceback
+import pandas as pd
 
 # Sub
 from datetime import datetime as dt
-from datetime import timedelta
 
 # Extras modules
 from modules import misc, gee, abmo
@@ -40,7 +35,7 @@ from modules import misc, gee, abmo
 parser = argparse.ArgumentParser(description=version)
 
 # create arguments
-parser.add_argument('--lat_lon', dest='lat_lon', action='store', default="-48.84725671390528,-22.04547298853004,-47.71712046185493,-23.21347463046867",
+parser.add_argument('--lat_lon', dest='lat_lon', action='store', default="-48.56620427006758,-22.457495449468666,-47.9777042099919,-22.80261692472655",
                    help="Two diagnal points (Latitude 1, Longitude 1, Latitude 2, Longitude 2) of the study area")
 parser.add_argument('--date_start', dest='date_start', action='store', default="1985-01-01",
                    help="Date to start time series")
@@ -54,7 +49,7 @@ parser.add_argument('--indice', dest='indice', action='store', default="mndwi,nd
                    help="Define which indice will be used to determine algal blooms (mndwi, ndvi, fai, sabi e/ou slope)")
 parser.add_argument('--min_occurrence', dest='min_occurrence', type=int, action='store', default=4,
                    help="Define how many indices will have to match in order to determine pixel as algal bloom occurrence")
-parser.add_argument('--seasonal', dest='seasonal', type=bool, action='store', default=False,
+parser.add_argument('--seasonal', dest='seasonal', action='store_true',
                    help="Define if pixels will be reduced by using seasons instead of months")
 parser.add_argument('--force_cache', dest='force_cache', action='store_true',
                    help="Force cache reseting to prevent image errors")
@@ -122,7 +117,13 @@ try:
   abmo.save_occurrences_geojson(df=abmo.df_timeseries, folder=folder)
 
   # save images to Local Folder (first try, based on image size) or to your Google Drive
-  #abmo.save_collection_tiff(folder=folder+"/tiff", folderName=args.name+"_"+version, rgb=False)
+  #abmo.save_collection_tiff(folder=folder+"/tiff", folderName=args.name+"_"+version, rgb=False).
+
+  # results
+  # add results and save it on disk
+  path_df_timeseries = folderRoot+'/results.csv'
+  df_timeseries = pd.read_csv(path_df_timeseries).drop(['Unnamed: 0'], axis=1, errors="ignore").append(abmo.df_timeseries) if os.path.exists(path_df_timeseries) else abmo.df_timeseries.copy(deep=True)
+  df_timeseries.to_csv(r''+path_df_timeseries)
 
   # ### Script termination notice
   script_time_all = time.time() - start_time
