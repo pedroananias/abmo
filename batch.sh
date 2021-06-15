@@ -24,7 +24,7 @@ for year in {1985..2018}
 do
 	for min_occ in "${MIN_OCCS[@]}"
 	do
-		eval "$PYTHON $BASEDIR/$SCRIPT --lat_lon=$LAT_LON --date_start=$year-01-01 --date_end=$year-12-31 --min_occurrence=$min_occ"
+		eval "$PYTHON $BASEDIR/$SCRIPT --lat_lon=$LAT_LON --date_start=$year-01-01 --date_end=$year-12-31 --min_occurrence=$min_occ --seasonal"
 	done
 done
 ############################################################################################
