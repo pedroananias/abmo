@@ -10,3 +10,6 @@ Version 1:
 
 Version 2: 
 - Fix nan values when generating geojson files
+
+Version 3: 
+- Fixes in the batch execution
