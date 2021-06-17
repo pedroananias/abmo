@@ -838,7 +838,7 @@ class Abmo:
     print("Saving dataset to file '"+path+"'...")
 
     # drop unused columns
-    df.drop(['label', 'pct_occurrence', 'pct_cloud'], axis=1, inplace=True)
+    df = df.drop(['label', 'pct_occurrence', 'pct_cloud'], axis=1)
 
     # saving dataset to file
     df.to_csv(r''+path, index=False)
