@@ -368,6 +368,7 @@ class Abmo:
     df_timeseries['instants']         = df_timeseries['occurrence']+df_timeseries['not_occurrence']+df_timeseries['cloud']
 
     # convert to int
+    df_timeseries.fillna(0, inplace=True)
     df_timeseries['pct_occurrence']   = df_timeseries['pct_occurrence'].astype(int)
     df_timeseries['pct_cloud']        = df_timeseries['pct_cloud'].astype(int)
 
