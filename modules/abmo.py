@@ -699,23 +699,13 @@ class Abmo:
     df = df.fillna(0)
 
     # # save occurrences data
-    # check seasonal reduction is enabled
-    if self.seasonal:
-      features = []
-      for index, row in df.iterrows():
-        features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"year": int(row['year']), "month": int(row['month']), "pct_occurrence": int(row['pct_occurrence']), "pct_cloud": int(row['pct_cloud']), "instants": int(row['instants'])}))
-      fc = geojson.FeatureCollection(features)
-      f = open(path,"w")
-      geojson.dump(fc, f)
-      f.close()
-    else:
-      features = []
-      for index, row in df.iterrows():
-        features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"year": int(row['year']), "month": int(row['month']), "pct_occurrence": int(row['pct_occurrence']), "pct_cloud": int(row['pct_cloud']), "instants": int(row['instants'])}))
-      fc = geojson.FeatureCollection(features)
-      f = open(path,"w")
-      geojson.dump(fc, f)
-      f.close()
+    features = []
+    for index, row in df.iterrows():
+      features.append(geojson.Feature(geometry=geojson.Point((row['lat'], row['lon'])), properties={"year": int(row['year']), "month": int(row['month']), "pct_occurrence": int(row['pct_occurrence']), "pct_cloud": int(row['pct_cloud']), "instants": int(row['instants'])}))
+    fc = geojson.FeatureCollection(features)
+    f = open(path,"w")
+    geojson.dump(fc, f)
+    f.close()
 
 
   # save a collection in tiff (zip) to folder (time series)
