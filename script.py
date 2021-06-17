@@ -121,6 +121,7 @@ try:
 
   # results
   # add results and save it on disk
+  abmo.df_timeseries = abmo.df_timeseries.drop(['label'], axis=1)
   path_df_timeseries = folderRoot+'/results[moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].csv'
   df_timeseries = pd.read_csv(path_df_timeseries).drop(['Unnamed: 0'], axis=1, errors="ignore").append(abmo.df_timeseries) if os.path.exists(path_df_timeseries) else abmo.df_timeseries.copy(deep=True)
   df_timeseries.to_csv(r''+path_df_timeseries)
