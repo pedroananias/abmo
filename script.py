@@ -108,20 +108,20 @@ try:
   abmo.process_timeseries_data()
 
   # save timeseries in csv file
-  abmo.save_dataset(df=abmo.df_timeseries, path=folder+'/timeseries.csv')
+  abmo.save_dataset(df=abmo.df_timeseries, path=folder+'/timeseries[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].csv')
 
   # create plot
   abmo.save_occurrences_plot(df=abmo.df_timeseries, folder=folder)
 
   # save geojson occurrences and clouds
-  abmo.save_occurrences_geojson(df=abmo.df_timeseries, folder=folder)
+  abmo.save_occurrences_geojson(df=abmo.df_timeseries, path=folder+'/occurrences[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].json')
 
   # save images to Local Folder (first try, based on image size) or to your Google Drive
   #abmo.save_collection_tiff(folder=folder+"/tiff", folderName=args.name+"_"+version, rgb=False).
 
   # results
   # add results and save it on disk
-  path_df_timeseries = folderRoot+'/results[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+'].csv'
+  path_df_timeseries = folderRoot+'/results[moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].csv'
   df_timeseries = pd.read_csv(path_df_timeseries).drop(['Unnamed: 0'], axis=1, errors="ignore").append(abmo.df_timeseries) if os.path.exists(path_df_timeseries) else abmo.df_timeseries.copy(deep=True)
   df_timeseries.to_csv(r''+path_df_timeseries)
 
