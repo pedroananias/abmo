@@ -107,11 +107,11 @@ try:
   # preprocessing
   abmo.process_timeseries_data()
 
-  # save timeseries in csv file
-  abmo.save_dataset(df=abmo.df_timeseries, path=folder+'/timeseries[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].csv')
-
   # create plot
   abmo.save_occurrences_plot(df=abmo.df_timeseries, folder=folder)
+
+  # save timeseries in csv file
+  abmo.save_dataset(df=abmo.df_timeseries, path=folder+'/timeseries[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].csv')
 
   # save geojson occurrences and clouds
   abmo.save_occurrences_geojson(df=abmo.df_timeseries, path=folder+'/occurrences[dstart='+str(args.date_start)+',dend='+str(args.date_end)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+'].json')
