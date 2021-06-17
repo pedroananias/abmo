@@ -363,9 +363,13 @@ class Abmo:
     #   df_timeseries = df_timeseries.groupby(['year','season','lat','lon']).sum().reset_index()
 
     # add porcentage of occurrence and cloud
-    df_timeseries['pct_occurrence']   = int((df_timeseries['occurrence']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']))*100)
-    df_timeseries['pct_cloud']        = int((df_timeseries['cloud']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']+df_timeseries['cloud']))*100)
+    df_timeseries['pct_occurrence']   = (df_timeseries['occurrence']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']))*100
+    df_timeseries['pct_cloud']        = (df_timeseries['cloud']/(df_timeseries['occurrence']+df_timeseries['not_occurrence']+df_timeseries['cloud']))*100
     df_timeseries['instants']         = df_timeseries['occurrence']+df_timeseries['not_occurrence']+df_timeseries['cloud']
+
+    # convert to int
+    df_timeseries['pct_occurrence']   = df_timeseries['pct_occurrence'].astype(int)
+    df_timeseries['pct_cloud']        = df_timeseries['pct_cloud'].astype(int)
 
     # save modified dataframe to its original variable
     self.df_timeseries = df_timeseries[df_columns]
