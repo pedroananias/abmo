@@ -8,7 +8,7 @@
 #########################################################################################################################################
 
 # ### Version
-version = "V3"
+version = "V4"
 
 
 # ### Module imports
@@ -41,6 +41,10 @@ parser.add_argument('--date_start', dest='date_start', action='store', default="
                    help="Date to start time series")
 parser.add_argument('--date_end', dest='date_end', action='store', default="2001-12-31",
                    help="Date to end time series")
+parser.add_argument('--date_start2', dest='date_start2', action='store', default=None,
+                   help="Date to start time series (second period)")
+parser.add_argument('--date_end2', dest='date_end2', action='store', default=None,
+                   help="Date to end time series (second period)")
 parser.add_argument('--name', dest='name', action='store', default="bbhr",
                    help="Place where to save generated files")
 parser.add_argument('--sensor', dest='sensor', action='store', default="landsat578",
@@ -51,6 +55,8 @@ parser.add_argument('--min_occurrence', dest='min_occurrence', type=int, action=
                    help="Define how many indices will have to match in order to determine pixel as algal bloom occurrence")
 parser.add_argument('--seasonal', dest='seasonal', action='store_true',
                    help="Define if pixels will be reduced by using seasons instead of months")
+parser.add_argument('--shapefile', dest='shapefile', action='store',
+                   help="Use a shapefile to clip a region of interest")
 parser.add_argument('--force_cache', dest='force_cache', action='store_true',
                    help="Force cache reseting to prevent image errors")
 
@@ -89,7 +95,7 @@ try:
   # ### ABMO execution
 
   # folder to save results from algorithm at
-  folder = folderRoot+'/'+dt.now().strftime("%Y%m%d_%H%M%S")+'[v='+str(version)+'-'+str(args.name)+',dstart='+str(args.date_start)+',dend='+str(args.date_end)+',i='+str(args.indice)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+']'
+  folder = folderRoot+'/'+dt.now().strftime("%Y%m%d_%H%M%S")+'[v='+str(version)+'-'+str(args.name)+',dstart='+str(args.date_start)+',dend='+str(args.date_end)+',dstart2='+str(args.date_start2)+',dend2='+str(args.date_end2)+',i='+str(args.indice)+',moc='+str(args.min_occurrence)+',s='+str(args.seasonal)+']'
   if not os.path.exists(folder):
     os.mkdir(folder)
 
@@ -97,12 +103,15 @@ try:
   abmo = abmo.Abmo(lat_lon=args.lat_lon,
                    date_start=dt.strptime(args.date_start, "%Y-%m-%d"),
                    date_end=dt.strptime(args.date_end, "%Y-%m-%d"),
+                   date_start2=dt.strptime(args.date_start2, "%Y-%m-%d") if not args.date_start2 is None else None,
+                   date_end2=dt.strptime(args.date_end2, "%Y-%m-%d") if not args.date_end2 is None else None,
                    sensor=args.sensor,
                    cache_path=folderCache, 
                    force_cache=args.force_cache,
                    indice=args.indice,
                    min_occurrence=args.min_occurrence,
-                   seasonal=args.seasonal)
+                   seasonal=args.seasonal,
+                   shapefile=args.shapefile)
 
   # preprocessing
   abmo.process_timeseries_data()

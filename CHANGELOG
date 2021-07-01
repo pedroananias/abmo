@@ -13,3 +13,7 @@ Version 2:
 
 Version 3: 
 - Fixes in the batch execution
+
+Version 4:
+- Added shapefile clipping for region of interest
+- Added second date period for splitted seasons

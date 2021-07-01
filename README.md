@@ -66,11 +66,14 @@ folder = "/path/to/desired/folder"
 abmo = abmo.Abmo(lat_lon="-48.84725671390528,-22.04547298853004,-47.71712046185493,-23.21347463046867",
                 date_start=dt.strptime("1985-01-01", "%Y-%m-%d"),
                 date_end=dt.strptime("2018-12-31", "%Y-%m-%d"),
+                date_start2=None,
+                date_end2=None,
                 sensor="landsat578",
                 cache_path=folder, 
                 force_cache=False,
                 indice="mndwi,ndvi,fai,sabi,slope",
-                min_occurrence=4)
+                min_occurrence=4,
+                shapefile="users/pedroananias/bruno/bbhr")
 
 # creating yearly timeseries
 abmo.process_timeseries_data()
